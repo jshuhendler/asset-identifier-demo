@@ -1,0 +1,248 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Asset Identifier Demo</title>
+  <style>
+    :root {
+      font-family: Inter, system-ui, sans-serif;
+      color: #e6edf3;
+      background: #0d1117;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1050px; margin: 60px auto; padding: 0 24px; }
+    .eyebrow { color: #7ee0b8; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+    h1 { font-size: clamp(30px, 5vw, 45px); margin: 12px 0; }
+    p { color: #919eae; line-height: 1.6; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 14px; padding: 24px; margin-top: 28px; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+    h2 { font-size: 18px; margin: 0; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button { border: 1px solid #414b57; color: #e6edf3; background: #242c36; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    button.primary { background: #238b61; border-color: #238b61; color: white; }
+    button:hover:not(:disabled) { filter: brightness(1.18); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; min-width: 710px; }
+    th { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+    th, td { padding: 15px 10px; border-bottom: 1px solid #30363d; }
+    td { font-size: 14px; }
+    input[type="checkbox"] { width: 17px; height: 17px; accent-color: #2fa875; cursor: pointer; }
+    .pill { color: #7ee0b8; background: #173b2e; border-radius: 20px; padding: 5px 9px; font-size: 12px; }
+    .pill.pending { color: #c7d2dd; background: #30363d; }
+    .pill.error { color: #ffaaa5; background: #4b2325; }
+    .progress { height: 9px; background: #30363d; border-radius: 20px; overflow: hidden; margin: 15px 0; }
+    #bar { height: 100%; width: 0%; background: #2fa875; transition: width .25s; }
+    #status { font-size: 13px; color: #a9b5c4; }
+    footer { text-align: center; font-size: 13px; color: #768390; padding: 35px 0; }
+    code { color: #a5caff; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">JAVASCRIPT · WORKFLOW AUTOMATION</div>
+  <h1>Asset Identifier Demo</h1>
+  <p>
+    A demonstration of bulk identifier correction for laboratory
+    equipment records. Select assets, process the corrections,
+    and verify the results.
+  </p>
+  <p><strong>Demo only:</strong> All records are fictional and remain in your browser.</p>
+
+  <section class="card">
+    <div class="toolbar">
+      <h2>Equipment Records</h2>
+      <div class="actions">
+        <button id="reset">Reset demo</button>
+        <button class="primary" id="run">Swap Selected (0)</button>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAll" aria-label="Select all assets"></th>
+            <th>Asset</th>
+            <th>Serial Number</th>
+            <th>Asset Tag</th>
+            <th>Equipment ID</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="records"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Processing Status</h2>
+    <div class="progress"><div id="bar"></div></div>
+    <div id="status" role="status" aria-live="polite">
+      Select one or more assets to begin.
+    </div>
+  </section>
+
+  <footer>
+    Designed and developed by <strong>Jonathan Shuhendler</strong>
+    · Fictional demonstration
+  </footer>
+</main>
+
+<script>
+  const initial = [
+    { id: 101, asset: "Pipette A", serial: "PIP-001", tag: "SN-84021" },
+    { id: 102, asset: "Pipette B", serial: "PIP-002", tag: "SN-84022" },
+    { id: 103, asset: "Pipette C", serial: "PIP-003", tag: "SN-84023" },
+    { id: 104, asset: "Pipette D", serial: "PIP-004", tag: "SN-84024" },
+    { id: 105, asset: "Pipette E", serial: "PIP-005", tag: "SN-84025" }
+  ];
+
+  let assets = [];
+  let selected = new Set();
+  let running = false;
+
+  const tbody = document.getElementById("records");
+  const runButton = document.getElementById("run");
+  const selectAll = document.getElementById("selectAll");
+  const resetButton = document.getElementById("reset");
+  const status = document.getElementById("status");
+  const bar = document.getElementById("bar");
+
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  function reset() {
+    if (running) return;
+    assets = initial.map(item => ({
+      ...item,
+      equipmentId: item.serial,
+      state: "Pending"
+    }));
+    selected.clear();
+    bar.style.width = "0%";
+    status.textContent = "Select one or more assets to begin.";
+    render();
+  }
+
+  function render() {
+    tbody.replaceChildren();
+
+    for (const asset of assets) {
+      const row = document.createElement("tr");
+
+      const cells = [
+        "", asset.asset, asset.serial, asset.tag,
+        asset.equipmentId, asset.state
+      ];
+
+      for (let i = 0; i < cells.length; i++) {
+        const td = document.createElement("td");
+
+        if (i === 0) {
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = selected.has(asset.id);
+          checkbox.disabled = running || asset.state === "Verified";
+          checkbox.setAttribute("aria-label", "Select " + asset.asset);
+          checkbox.addEventListener("change", () => {
+            if (checkbox.checked) selected.add(asset.id);
+            else selected.delete(asset.id);
+            render();
+          });
+          td.appendChild(checkbox);
+        } else if (i === 5) {
+          const badge = document.createElement("span");
+          badge.className = "pill " +
+            (asset.state === "Pending" ? "pending" :
+             asset.state === "Error" ? "error" : "");
+          badge.textContent = asset.state;
+          td.appendChild(badge);
+        } else {
+          td.textContent = cells[i];
+        }
+
+        row.appendChild(td);
+      }
+
+      tbody.appendChild(row);
+    }
+
+    const selectable = assets.filter(a => a.state !== "Verified");
+    selectAll.disabled = running || !selectable.length;
+    selectAll.checked = selectable.length > 0 &&
+      selectable.every(a => selected.has(a.id));
+    selectAll.indeterminate = selectable.some(a => selected.has(a.id)) &&
+      !selectAll.checked;
+
+    runButton.disabled = running || selected.size === 0;
+    resetButton.disabled = running;
+    runButton.textContent = running
+      ? "Processing..."
+      : `Swap Selected (${selected.size})`;
+  }
+
+  selectAll.addEventListener("change", () => {
+    for (const asset of assets) {
+      if (asset.state === "Verified") continue;
+      if (selectAll.checked) selected.add(asset.id);
+      else selected.delete(asset.id);
+    }
+    render();
+  });
+
+  resetButton.addEventListener("click", reset);
+
+  runButton.addEventListener("click", async () => {
+    if (running || selected.size === 0) return;
+
+    running = true;
+    const batch = assets.filter(a => selected.has(a.id));
+    let completed = 0;
+    render();
+
+    for (const asset of batch) {
+      status.textContent = `Processing ${asset.asset}...`;
+      await delay(450);
+
+      const oldSerial = asset.serial;
+      const oldTag = asset.tag;
+
+      // Perform the identifier correction.
+      asset.serial = oldTag;
+      asset.tag = oldSerial;
+      asset.equipmentId = oldSerial;
+
+      // Verify that the expected values were assigned.
+      const valid =
+        asset.serial === oldTag &&
+        asset.tag === oldSerial &&
+        asset.equipmentId === oldSerial;
+
+      asset.state = valid ? "Verified" : "Error";
+      completed++;
+      bar.style.width = `${(completed / batch.length) * 100}%`;
+      selected.delete(asset.id);
+      render();
+
+      if (!valid) {
+        status.textContent = `Verification failed: ${asset.asset}`;
+        break;
+      }
+    }
+
+    running = false;
+    render();
+
+    if (completed === batch.length &&
+        batch.every(a => a.state === "Verified")) {
+      status.textContent = `${completed} assets successfully verified.`;
+    }
+  });
+
+  reset();
+</script>
+</body>
+</html>
